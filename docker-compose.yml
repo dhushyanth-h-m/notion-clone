@@ -1,0 +1,19 @@
+services: 
+  frontend: 
+    build: ./client
+    ports: 
+      - "3000:3000"
+    volumes: 
+      - ./client:/app
+    environment:
+      - REACT_APP_API_URL=http://localhost:5001
+    depends_on:
+      - backend
+
+  backend: 
+    build: ./server 
+    ports: 
+      - "5001:5001"
+    volumes: 
+      - ./server:/app
+
