@@ -1,40 +1,63 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
-import Page from './PageModel';
+import Workspace from './WorkspaceModel';
+import User from './UserModel';
 
-// Interface for Block attributes
+// Valid block types
+export type BlockType = 'page' | 'text' | 'heading' | 'database' | 'table' | 'todo';
+
+// Block attributes interface
 interface BlockAttributes {
   id: string;
-  page_id: string;
+  type: BlockType;
+  content: Record<string, any>;
   parent_id: string | null;
-  type: 'text' | 'heading' | 'list';
-  content: string;
-  position: number;
+  workspace_id: string;
+  created_by: string | null;
   created_at: Date;
   updated_at: Date;
+  is_deleted: boolean;
+  version: number;
+  permissions: Record<string, any>;
 }
 
-// Interface for creating a new Block
-interface BlockCreationAttributes extends Optional<BlockAttributes, 'parent_id' | 'position' | 'created_at' | 'updated_at'> {}
+// Block creation attributes interface (optional fields for creation)
+interface BlockCreationAttributes extends Optional<BlockAttributes, 
+  'id' | 'parent_id' | 'created_by' | 'created_at' | 'updated_at' | 'is_deleted' | 'version' | 'permissions'
+> {}
 
 // Block model class
 class Block extends Model<BlockAttributes, BlockCreationAttributes> implements BlockAttributes {
   public id!: string;
-  public page_id!: string;
+  public type!: BlockType;
+  public content!: Record<string, any>;
   public parent_id!: string | null;
-  public type!: 'text' | 'heading' | 'list';
-  public content!: string;
-  public position!: number;
+  public workspace_id!: string;
+  public created_by!: string | null;
   public created_at!: Date;
   public updated_at!: Date;
+  public is_deleted!: boolean;
+  public version!: number;
+  public permissions!: Record<string, any>;
   
-  // Optional getter for client-side compatibility
-  public get pageId(): string {
-    return this.page_id;
-  }
+  // Virtual fields for related data
+  public children?: Block[];
+  public properties?: any[];
+  public parent?: Block;
+  public creator?: User;
+  public workspace?: Workspace;
   
+  // Optional getters for client-side compatibility
   public get parentId(): string | null {
     return this.parent_id;
+  }
+  
+  public get workspaceId(): string {
+    return this.workspace_id;
+  }
+  
+  public get createdBy(): string | null {
+    return this.created_by;
   }
   
   public get createdAt(): Date {
@@ -45,8 +68,9 @@ class Block extends Model<BlockAttributes, BlockCreationAttributes> implements B
     return this.updated_at;
   }
   
-  // Virtual field for children blocks (populated through association)
-  public children?: Block[];
+  public get isDeleted(): boolean {
+    return this.is_deleted;
+  }
 }
 
 // Initialize the model
@@ -57,13 +81,17 @@ Block.init(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true
     },
-    page_id: {
-      type: DataTypes.UUID,
+    type: {
+      type: DataTypes.STRING(50),
       allowNull: false,
-      references: {
-        model: 'pages',
-        key: 'id'
+      validate: {
+        isIn: [['page', 'text', 'heading', 'database', 'table', 'todo']]
       }
+    },
+    content: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: {}
     },
     parent_id: {
       type: DataTypes.UUID,
@@ -73,20 +101,21 @@ Block.init(
         key: 'id'
       }
     },
-    type: {
-      type: DataTypes.ENUM('text', 'heading', 'list'),
+    workspace_id: {
+      type: DataTypes.UUID,
       allowNull: false,
-      defaultValue: 'text'
+      references: {
+        model: 'workspaces',
+        key: 'id'
+      }
     },
-    content: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-      defaultValue: ''
-    },
-    position: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 0
+    created_by: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
     },
     created_at: {
       type: DataTypes.DATE,
@@ -97,6 +126,21 @@ Block.init(
       type: DataTypes.DATE,
       allowNull: false,
       defaultValue: DataTypes.NOW
+    },
+    is_deleted: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    },
+    version: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1
+    },
+    permissions: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: { public: false }
     }
   },
   {
@@ -104,20 +148,19 @@ Block.init(
     tableName: 'blocks',
     modelName: 'Block',
     timestamps: true,
-    underscored: true
+    underscored: true,
+    // Exclude deleted blocks by default
+    defaultScope: {
+      where: {
+        is_deleted: false
+      }
+    },
+    // Include deleted blocks when needed
+    scopes: {
+      withDeleted: {}
+    }
   }
 );
-
-// Define associations
-Block.belongsTo(Page, {
-  foreignKey: 'page_id',
-  as: 'page'
-});
-
-Page.hasMany(Block, {
-  foreignKey: 'page_id',
-  as: 'blocks'
-});
 
 // Self-referencing association for parent-child relationship
 Block.belongsTo(Block, {
@@ -128,6 +171,27 @@ Block.belongsTo(Block, {
 Block.hasMany(Block, {
   foreignKey: 'parent_id',
   as: 'children'
+});
+
+// Associations with other models
+Block.belongsTo(Workspace, {
+  foreignKey: 'workspace_id',
+  as: 'workspace'
+});
+
+Block.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'creator'
+});
+
+Workspace.hasMany(Block, {
+  foreignKey: 'workspace_id',
+  as: 'blocks'
+});
+
+User.hasMany(Block, {
+  foreignKey: 'created_by',
+  as: 'created_blocks'
 });
 
 export default Block; 

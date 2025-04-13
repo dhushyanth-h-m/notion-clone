@@ -1,214 +1,315 @@
-import express, { Request, Response, RequestHandler } from 'express';
-import { authenticateToken } from '../middleware/auth';
-import { Block, Page } from '../models';
+import express from 'express';
+import { Block, Property, BlockHistory, SearchIndex } from '../models';
 import { v4 as uuidv4 } from 'uuid';
+import { authenticate } from '../middleware/auth';
+import sequelize from '../config/database';
 
 const router = express.Router();
 
-// Middleware to check if user owns the block (through page ownership)
-const checkBlockOwnership = (async (req: Request, res: Response, next: Function) => {
+/**
+ * @route   POST /api/blocks
+ * @desc    Create a new block
+ * @access  Private
+ */
+router.post('/', authenticate, async (req, res) => {
+  const { type, content, parent_id, workspace_id, properties = [] } = req.body;
+  
+  // Validate required fields
+  if (!type || !workspace_id) {
+    return res.status(400).json({ 
+      success: false,
+      message: 'Type and workspace_id are required'
+    });
+  }
+  
+  // Start a transaction
+  const transaction = await sequelize.transaction();
+  
   try {
-    const blockId = req.params.id;
-    const userId = req.user.userId;
+    // Create the block
+    const block = await Block.create({
+      id: uuidv4(), // Generate new UUID
+      type,
+      content: content || {},
+      parent_id: parent_id || null,
+      workspace_id,
+      created_by: req.user.id,
+      version: 1,
+      is_deleted: false,
+      permissions: { public: false }
+    }, { transaction });
     
-    const block = await Block.findByPk(blockId, {
-      include: [{
-        model: Page,
-        as: 'page'
-      }]
+    // Add properties if provided
+    if (properties.length > 0) {
+      const propertyPromises = properties.map((prop, index) => {
+        return Property.create({
+          block_id: block.id,
+          name: prop.name,
+          type: prop.type,
+          config: prop.config || {},
+          value: prop.value || null,
+          position: index
+        }, { transaction });
+      });
+      
+      await Promise.all(propertyPromises);
+    }
+    
+    // Record history
+    await BlockHistory.create({
+      block_id: block.id,
+      content: block.content,
+      version: 1,
+      modified_by: req.user.id
+    }, { transaction });
+
+    // Index for search
+    await SearchIndex.create({
+      block_id: block.id
+    }, { transaction });
+    
+    // If this is a page type block, add default properties
+    if (type === 'page') {
+      await Property.create({
+        block_id: block.id,
+        name: 'title',
+        type: 'text',
+        config: { format: 'plain_text' },
+        value: { text: content.title || 'Untitled' },
+        position: 0
+      }, { transaction });
+    }
+    
+    // Commit the transaction
+    await transaction.commit();
+    
+    // Fetch the block with its properties
+    const result = await Block.findByPk(block.id, {
+      include: [
+        { model: Property, as: 'properties' },
+        { model: Block, as: 'children' }
+      ]
+    });
+    
+    return res.status(201).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    // Rollback transaction on error
+    await transaction.rollback();
+    console.error('Error creating block:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error creating block',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/blocks/:id
+ * @desc    Get a block by ID with children
+ * @access  Private
+ */
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    const block = await Block.findByPk(req.params.id, {
+      include: [
+        { model: Property, as: 'properties' },
+        { 
+          model: Block, 
+          as: 'children',
+          include: [{ model: Property, as: 'properties' }]
+        }
+      ]
     });
     
     if (!block) {
-      return res.status(404).json({ message: 'Block not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Block not found'
+      });
     }
     
-    if (!block.page || block.page.user_id !== userId) {
-      return res.status(403).json({ message: 'You do not have permission to access this block' });
-    }
-    
-    next();
+    return res.status(200).json({
+      success: true,
+      data: block
+    });
   } catch (error) {
-    console.error('Block ownership check error:', error);
-    res.status(500).json({ message: 'Server error checking block ownership' });
+    console.error('Error fetching block:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching block',
+      error: error.message
+    });
   }
-}) as RequestHandler;
+});
 
-// Get blocks for a page
-router.get('/page/:pageId', 
-  authenticateToken as RequestHandler,
-  (async (req: Request, res: Response) => {
-    try {
-      const pageId = req.params.pageId;
-      
-      // Check if user owns the page
-      const page = await Page.findByPk(pageId);
-      if (!page) {
-        return res.status(404).json({ message: 'Page not found' });
-      }
-      
-      if (page.user_id !== req.user.userId) {
-        return res.status(403).json({ message: 'You do not have permission to access this page' });
-      }
-      
-      // Get blocks
-      const blocks = await Block.findAll({
-        where: { page_id: pageId },
-        order: [['position', 'ASC']],
-        include: [{
-          model: Block,
-          as: 'children',
-          required: false
-        }]
-      });
-      
-      res.json(blocks);
-    } catch (error) {
-      console.error('Get blocks error:', error);
-      res.status(500).json({ message: 'Server error fetching blocks' });
-    }
-  }) as RequestHandler
-);
-
-// Get a specific block
-router.get('/:id', 
-  authenticateToken as RequestHandler,
-  checkBlockOwnership,
-  (async (req: Request, res: Response) => {
-    try {
-      const block = await Block.findByPk(req.params.id, {
-        include: [{
-          model: Block,
-          as: 'children',
-          required: false
-        }]
-      });
-      
-      res.json(block);
-    } catch (error) {
-      console.error('Get block error:', error);
-      res.status(500).json({ message: 'Server error fetching block' });
-    }
-  }) as RequestHandler
-);
-
-// Create a new block
-router.post('/', 
-  authenticateToken as RequestHandler,
-  (async (req: Request, res: Response) => {
-    try {
-      const { pageId, parentId, type, content, position } = req.body;
-      
-      // Check if user owns the page
-      const page = await Page.findByPk(pageId);
-      if (!page) {
-        return res.status(404).json({ message: 'Page not found' });
-      }
-      
-      if (page.user_id !== req.user.userId) {
-        return res.status(403).json({ message: 'You do not have permission to access this page' });
-      }
-      
-      // If parentId is provided, check if it exists and belongs to the same page
-      if (parentId) {
-        const parentBlock = await Block.findByPk(parentId);
-        if (!parentBlock) {
-          return res.status(404).json({ message: 'Parent block not found' });
-        }
+/**
+ * @route   GET /api/blocks/:id/tree
+ * @desc    Get a block and its entire subtree (recursive)
+ * @access  Private
+ */
+router.get('/:id/tree', authenticate, async (req, res) => {
+  try {
+    // Using a recursive query to get the entire tree
+    const [results] = await sequelize.query(`
+      WITH RECURSIVE block_tree AS (
+        SELECT b.*, 0 as depth 
+        FROM blocks b 
+        WHERE b.id = :blockId AND b.is_deleted = false
         
-        if (parentBlock.page_id !== pageId) {
-          return res.status(400).json({ message: 'Parent block must belong to the same page' });
-        }
-      }
-      
-      // Get last position if not provided
-      let blockPosition = position;
-      if (blockPosition === undefined) {
-        const lastBlock = await Block.findOne({
-          where: { page_id: pageId, parent_id: parentId || null },
-          order: [['position', 'DESC']]
-        });
+        UNION ALL
         
-        blockPosition = lastBlock ? lastBlock.position + 1 : 0;
-      }
-      
-      // Create block
-      const block = await Block.create({
-        id: uuidv4(),
-        page_id: pageId,
-        parent_id: parentId || null,
-        type: type || 'text',
-        content: content || '',
-        position: blockPosition
+        SELECT b.*, bt.depth + 1
+        FROM blocks b
+        JOIN block_tree bt ON b.parent_id = bt.id
+        WHERE b.is_deleted = false
+      )
+      SELECT * FROM block_tree ORDER BY depth ASC;
+    `, {
+      replacements: { blockId: req.params.id }
+    });
+    
+    // If no results, block doesn't exist
+    if (results.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Block not found'
       });
-      
-      res.status(201).json(block);
-    } catch (error) {
-      console.error('Create block error:', error);
-      res.status(500).json({ message: 'Server error creating block' });
     }
-  }) as RequestHandler
-);
+    
+    // Build a hierarchical structure for the tree
+    const buildTree = (blocks, parentId = null, depth = 0) => {
+      return blocks
+        .filter(b => b.parent_id === parentId && b.depth === depth)
+        .map(block => ({
+          ...block,
+          children: buildTree(blocks, block.id, depth + 1)
+        }));
+    };
+    
+    const tree = buildTree(results);
+    
+    return res.status(200).json({
+      success: true,
+      data: tree[0] // The root of the tree
+    });
+  } catch (error) {
+    console.error('Error fetching block tree:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching block tree',
+      error: error.message
+    });
+  }
+});
 
-// Update a block
-router.put('/:id', 
-  authenticateToken as RequestHandler,
-  checkBlockOwnership,
-  (async (req: Request, res: Response) => {
-    try {
-      const { content, type, position } = req.body;
-      
-      const block = await Block.findByPk(req.params.id);
-      if (!block) {
-        return res.status(404).json({ message: 'Block not found' });
-      }
-      
-      // Update fields if provided
-      if (content !== undefined) block.content = content;
-      if (type !== undefined) block.type = type;
-      if (position !== undefined) block.position = position;
-      
-      await block.save();
-      
-      res.json(block);
-    } catch (error) {
-      console.error('Update block error:', error);
-      res.status(500).json({ message: 'Server error updating block' });
+/**
+ * @route   PUT /api/blocks/:id
+ * @desc    Update a block
+ * @access  Private
+ */
+router.put('/:id', authenticate, async (req, res) => {
+  const { content, type, parent_id, permissions } = req.body;
+  const blockId = req.params.id;
+  
+  // Start a transaction
+  const transaction = await sequelize.transaction();
+  
+  try {
+    // Get current block
+    const block = await Block.findByPk(blockId);
+    
+    if (!block) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Block not found'
+      });
     }
-  }) as RequestHandler
-);
+    
+    // Update block version
+    const newVersion = block.version + 1;
+    
+    // Save current state to history
+    await BlockHistory.create({
+      block_id: blockId,
+      content: block.content,
+      version: block.version,
+      modified_by: req.user.id
+    }, { transaction });
+    
+    // Update the block
+    const updateData: any = { version: newVersion };
+    
+    if (content) updateData.content = content;
+    if (type) updateData.type = type;
+    if (parent_id !== undefined) updateData.parent_id = parent_id;
+    if (permissions) updateData.permissions = permissions;
+    
+    await block.update(updateData, { transaction });
+    
+    // Commit the transaction
+    await transaction.commit();
+    
+    // Fetch the updated block
+    const updatedBlock = await Block.findByPk(block.id, {
+      include: [
+        { model: Property, as: 'properties' }
+      ]
+    });
+    
+    return res.status(200).json({
+      success: true,
+      data: updatedBlock
+    });
+  } catch (error) {
+    // Rollback transaction on error
+    await transaction.rollback();
+    console.error('Error updating block:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating block',
+      error: error.message
+    });
+  }
+});
 
-// Delete a block
-router.delete('/:id', 
-  authenticateToken as RequestHandler,
-  checkBlockOwnership,
-  (async (req: Request, res: Response) => {
-    try {
-      const block = await Block.findByPk(req.params.id);
-      if (!block) {
-        return res.status(404).json({ message: 'Block not found' });
-      }
-      
-      // Recursively delete all children blocks
-      async function deleteChildBlocks(parentId: string) {
-        const children = await Block.findAll({ where: { parent_id: parentId } });
-        
-        for (const child of children) {
-          await deleteChildBlocks(child.id);
-          await child.destroy();
-        }
-      }
-      
-      await deleteChildBlocks(block.id);
-      
-      // Delete the block
-      await block.destroy();
-      
-      res.json({ message: 'Block deleted successfully' });
-    } catch (error) {
-      console.error('Delete block error:', error);
-      res.status(500).json({ message: 'Server error deleting block' });
+/**
+ * @route   DELETE /api/blocks/:id
+ * @desc    Soft delete a block
+ * @access  Private
+ */
+router.delete('/:id', authenticate, async (req, res) => {
+  const blockId = req.params.id;
+  
+  try {
+    const block = await Block.findByPk(blockId);
+    
+    if (!block) {
+      return res.status(404).json({
+        success: false,
+        message: 'Block not found'
+      });
     }
-  }) as RequestHandler
-);
+    
+    // Soft delete by marking is_deleted as true
+    await block.update({ is_deleted: true });
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Block deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting block:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error deleting block',
+      error: error.message
+    });
+  }
+});
 
-export default router; 
+export default router;

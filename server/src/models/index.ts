@@ -1,6 +1,11 @@
 import User from './UserModel';
-import Page from './PageModel';
+import Workspace from './WorkspaceModel';
+import WorkspaceMember from './WorkspaceMemberModel';
 import Block from './BlockModel';
+import Property from './PropertyModel';
+import Relation from './RelationModel';
+import BlockHistory from './BlockHistoryModel';
+import SearchIndex from './SearchIndexModel';
 import sequelize from '../config/database';
 
 // Initialize database
@@ -20,6 +25,11 @@ export const initDb = async () => {
 
 export {
   User,
-  Page,
-  Block
+  Workspace,
+  WorkspaceMember,
+  Block,
+  Property,
+  Relation,
+  BlockHistory,
+  SearchIndex
 }; 

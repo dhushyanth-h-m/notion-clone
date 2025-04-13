@@ -27,3 +27,6 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     res.status(403).json({ message: 'Invalid token' });
   }
 };
+
+// Alias for authenticateToken
+export const authenticate = authenticateToken;
