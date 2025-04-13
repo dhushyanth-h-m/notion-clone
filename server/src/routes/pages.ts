@@ -1,140 +1,127 @@
 import express, { Request, Response, RequestHandler } from 'express';
 import { authenticateToken } from '../middleware/auth';
-import { Page, Block } from '../models';
-import { v4 as uuidv4 } from 'uuid';
+import { Pool } from 'pg';
+import Page from '../models/Page';
 
+// Database connection
+const connectionString = `postgres://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'postgres'}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'notion_clone'}`;
+const pool = new Pool({ connectionString });
+
+// Create router instance
 const router = express.Router();
 
-// Middleware to check if user owns the page
-const checkPageOwnership = (async (req: Request, res: Response, next: Function) => {
-  try {
-    const pageId = req.params.id;
-    const userId = req.user.userId;
-    
-    const page = await Page.findByPk(pageId);
-    
-    if (!page) {
-      return res.status(404).json({ message: 'Page not found' });
-    }
-    
-    if (page.user_id !== userId) {
-      return res.status(403).json({ message: 'You do not have permission to access this page' });
-    }
-    
-    next();
-  } catch (error) {
-    console.error('Page ownership check error:', error);
-    res.status(500).json({ message: 'Server error checking page ownership' });
-  }
-}) as RequestHandler;
-
 // Get all pages for the current user
-router.get('/', 
+router.get(
+  '/',
   authenticateToken as RequestHandler,
   (async (req: Request, res: Response) => {
     try {
-      const pages = await Page.findAll({
-        where: { user_id: req.user.userId },
-        order: [['updated_at', 'DESC']]
-      });
+      const userId = req.user.userId;
+      const pages = await Page.findByUserId(userId);
       
       res.json(pages);
     } catch (error) {
-      console.error('Get pages error:', error);
+      console.error('Error fetching pages:', error);
       res.status(500).json({ message: 'Server error fetching pages' });
     }
   }) as RequestHandler
 );
 
-// Get a specific page with its blocks
-router.get('/:id', 
+// Get a specific page by ID
+router.get(
+  '/:id',
   authenticateToken as RequestHandler,
-  checkPageOwnership,
   (async (req: Request, res: Response) => {
     try {
-      const page = await Page.findByPk(req.params.id, {
-        include: [{
-          model: Block,
-          as: 'blocks',
-          order: [['position', 'ASC']]
-        }]
-      });
+      const pageId = parseInt(req.params.id);
+      const userId = req.user.userId;
+      
+      const page = await Page.findByIdAndUserId(pageId, userId);
+      
+      if (!page) {
+        return res.status(404).json({ message: 'Page not found or access denied' });
+      }
       
       res.json(page);
     } catch (error) {
-      console.error('Get page error:', error);
+      console.error('Error fetching page:', error);
       res.status(500).json({ message: 'Server error fetching page' });
     }
   }) as RequestHandler
 );
 
 // Create a new page
-router.post('/', 
+router.post(
+  '/',
   authenticateToken as RequestHandler,
   (async (req: Request, res: Response) => {
     try {
-      const { title } = req.body;
+      const { title, content } = req.body;
+      const userId = req.user.userId;
       
-      const page = await Page.create({
-        id: uuidv4(),
-        user_id: req.user.userId,
-        title: title || 'Untitled'
+      if (!title) {
+        return res.status(400).json({ message: 'Title is required' });
+      }
+      
+      const newPage = await Page.createPage({
+        title,
+        content: content || '',
+        user_id: userId
       });
       
-      res.status(201).json(page);
+      res.status(201).json(newPage);
     } catch (error) {
-      console.error('Create page error:', error);
+      console.error('Error creating page:', error);
       res.status(500).json({ message: 'Server error creating page' });
     }
   }) as RequestHandler
 );
 
 // Update a page
-router.put('/:id', 
+router.put(
+  '/:id',
   authenticateToken as RequestHandler,
-  checkPageOwnership,
   (async (req: Request, res: Response) => {
     try {
-      const { title } = req.body;
+      const pageId = parseInt(req.params.id);
+      const userId = req.user.userId;
+      const { title, content } = req.body;
       
-      const page = await Page.findByPk(req.params.id);
-      if (!page) {
-        return res.status(404).json({ message: 'Page not found' });
+      const updatedPage = await Page.updatePage(pageId, userId, { 
+        title, 
+        content 
+      });
+      
+      if (!updatedPage) {
+        return res.status(404).json({ message: 'Page not found or access denied' });
       }
       
-      page.title = title;
-      await page.save();
-      
-      res.json(page);
+      res.json(updatedPage);
     } catch (error) {
-      console.error('Update page error:', error);
+      console.error('Error updating page:', error);
       res.status(500).json({ message: 'Server error updating page' });
     }
   }) as RequestHandler
 );
 
 // Delete a page
-router.delete('/:id', 
+router.delete(
+  '/:id',
   authenticateToken as RequestHandler,
-  checkPageOwnership,
   (async (req: Request, res: Response) => {
     try {
-      const page = await Page.findByPk(req.params.id);
-      if (!page) {
-        return res.status(404).json({ message: 'Page not found' });
+      const pageId = parseInt(req.params.id);
+      const userId = req.user.userId;
+      
+      const success = await Page.deletePage(pageId, userId);
+      
+      if (!success) {
+        return res.status(404).json({ message: 'Page not found or access denied' });
       }
-      
-      // Delete all associated blocks
-      await Block.destroy({
-        where: { page_id: req.params.id }
-      });
-      
-      // Delete the page
-      await page.destroy();
       
       res.json({ message: 'Page deleted successfully' });
     } catch (error) {
-      console.error('Delete page error:', error);
+      console.error('Error deleting page:', error);
       res.status(500).json({ message: 'Server error deleting page' });
     }
   }) as RequestHandler

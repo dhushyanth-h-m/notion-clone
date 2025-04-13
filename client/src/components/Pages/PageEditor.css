@@ -1,0 +1,110 @@
+.page-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px;
+  overflow-y: auto;
+  background-color: white;
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.page-title-input {
+  font-size: 1.8rem;
+  font-weight: bold;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  width: 100%;
+  max-width: 600px;
+  transition: border-color 0.2s;
+}
+
+.page-title-input:focus {
+  outline: none;
+  border-color: #2ecc71;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.save-button {
+  background-color: #2ecc71;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 15px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.save-button:hover:not(:disabled) {
+  background-color: #27ae60;
+}
+
+.save-button:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
+
+.save-button.saving {
+  background-color: #95a5a6;
+  cursor: wait;
+}
+
+.last-saved {
+  font-size: 0.8rem;
+  color: #7f8c8d;
+}
+
+.save-error {
+  color: #e74c3c;
+  font-size: 0.9rem;
+}
+
+.page-content-editor {
+  flex: 1;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: none;
+  transition: border-color 0.2s;
+}
+
+.page-content-editor:focus {
+  outline: none;
+  border-color: #2ecc71;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .editor-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .editor-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .page-title-input {
+    font-size: 1.5rem;
+    width: 100%;
+  }
+} 

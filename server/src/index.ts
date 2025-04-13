@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
 import authRoutes from './routes/auth';
+import pageRoutes from './routes/pages';
 
 dotenv.config();
 
@@ -42,6 +43,27 @@ const createUsersTable = async () => {
   }
 };
 
+// Create pages table if it doesn't exist
+const createPagesTable = async () => {
+  const createTableQuery = `
+    CREATE TABLE IF NOT EXISTS pages (
+      id SERIAL PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      content TEXT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  try {
+    await pool.query(createTableQuery);
+    console.log('Pages table created successfully');
+  } catch (error) {
+    console.error('Error creating pages table', error);
+  }
+};
+
 // Initialize database
 console.log('Attempting to initialize database...');
 (async () => {
@@ -50,6 +72,7 @@ console.log('Attempting to initialize database...');
     console.log('Database connection established');
     
     await createUsersTable();
+    await createPagesTable();
   } catch (err) {
     console.error('Failed to initialize database:', err);
   }
@@ -57,6 +80,7 @@ console.log('Attempting to initialize database...');
 
 // Routes
 app.use('/auth', authRoutes);
+app.use('/pages', pageRoutes);
 
 app.get('/', (req, res) => {
     res.send("Backend is running");
