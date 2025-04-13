@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './Signup.css';
+import { authApi } from '../../api';
 
 interface SignupFormData {
   name: string;
@@ -67,33 +68,15 @@ const Signup: React.FC = () => {
     
     if (validate()) {
       try {
-        // Replace with your actual signup API call
-        const response = await fetch('http://localhost:5001/auth/signup', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            name: formData.name,
-            email: formData.email,
-            password: formData.password
-          }),
-        });
+        const data = await authApi.register(formData.name, formData.email, formData.password);
         
-        const data = await response.json();
-        
-        if (response.ok) {
-          // Handle successful signup
-          console.log('Signup successful', data);
-          // Redirect to login or home page
-          window.location.href = '/';
-        } else {
-          // Handle error response
-          setErrors({ email: data.message });
-        }
-      } catch (error) {
+        // Handle successful signup
+        console.log('Signup successful', data);
+        // Redirect to login or home page
+        window.location.href = '/';
+      } catch (error: any) {
         console.error('Signup error:', error);
-        setErrors({ email: 'Signup failed. Please try again.' });
+        setErrors({ email: error.response?.data?.message || 'Signup failed. Please try again.' });
       }
     }
   };
@@ -107,7 +90,7 @@ const Signup: React.FC = () => {
             type="text"
             id="name"
             name="name"
-            placeholder="Your name"
+            placeholder="Enter your name..."
             value={formData.name}
             onChange={handleChange}
             className={errors.name ? 'error' : ''}
@@ -121,7 +104,7 @@ const Signup: React.FC = () => {
             type="email"
             id="email"
             name="email"
-            placeholder="m@example.com"
+            placeholder="Enter your email address..."
             value={formData.email}
             onChange={handleChange}
             className={errors.email ? 'error' : ''}
@@ -136,6 +119,7 @@ const Signup: React.FC = () => {
               type={showPassword ? "text" : "password"}
               id="password"
               name="password"
+              placeholder='Enter your password...'
               value={formData.password}
               onChange={handleChange}
               className={errors.password ? 'error' : ''}
@@ -157,10 +141,11 @@ const Signup: React.FC = () => {
               type={showConfirmPassword ? "text" : "password"}
               id="confirmPassword"
               name="confirmPassword"
+              placeholder='Confirm your password...'
               value={formData.confirmPassword}
               onChange={handleChange}
               className={errors.confirmPassword ? 'error' : ''}
-            />
+            /> 
             <span 
               className="password-toggle-icon"
               onClick={toggleConfirmPasswordVisibility}

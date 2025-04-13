@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
+import apiClient from '../api/client';
 
 interface User {
     id: string;
@@ -44,26 +45,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const fetchUserData = async (token: string) => {
         try {
-            const response = await fetch('http://localhost:5001/auth/me', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (response.ok) {
-                const userData = await response.json();
-                setUser(userData);
-            } else {
-                const status = response.status;
-                if (status === 401 || status === 403) {
-                    console.log("Token invalid, removing from localStorage");
-                    localStorage.removeItem('token');
-                } else {
-                    console.log(`Error fetching user data: ${status}`, await response.text());
-                }
-            }
+            const response = await apiClient.get('/auth/me');
+            
+            console.log("User data fetched successfully:", response.data);
+            
+            setUser(response.data);
         } catch (error) {
-            console.log("Error fetching user data", error);
+            console.error("Error fetching user data:", error);
+            
+            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+                console.log("Token invalid, removing from localStorage");
+                localStorage.removeItem('token');
+            }
         } finally {
             setLoading(false);
         }

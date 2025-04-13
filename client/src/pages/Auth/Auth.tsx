@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Login from '../../components/Login/Login';
 import Signup from '../../components/Signup/Signup';
 import { useAuth } from '../../context/AuthContext';
+import { authApi } from '../../api';
 import './Auth.css';
 
 declare global {
@@ -31,8 +32,10 @@ const Auth: React.FC = () => {
         if (window.google && googleButtonRef.current) {
             try {
                 window.google.accounts.id.initialize({
-                    client_id: '682799088248-33ao10nip4lhf9d0ja113nnofse0o1ke.apps.googleusercontent.com',
-                    callback: handleGoogleSignIn
+                    client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID || '682799088248-33ao10nip4lhf9d0ja113nnofse0o1ke.apps.googleusercontent.com',
+                    callback: handleGoogleSignIn,
+                    // Add this to allow testing in Docker/localhost
+                    allowed_parent_origin: window.location.origin
                 });
                 
                 window.google.accounts.id.renderButton(
@@ -81,19 +84,8 @@ const Auth: React.FC = () => {
 
     const handleGoogleSignIn = async (response: any) => {
         try {
-            const serverResponse = await fetch('http://localhost:5001/auth/google', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ token: response.credential }),
-            });
-            
-            if (!serverResponse.ok) {
-                throw new Error(`Server returned ${serverResponse.status}`);
-            }
-            
-            const data = await serverResponse.json();
+            console.log("Google sign-in response:", response);
+            const data = await authApi.loginWithGoogle(response.credential);
             
             if (data.token) {
                 login(data.token);
@@ -135,10 +127,10 @@ const Auth: React.FC = () => {
                     <div className="social-login-text">OR CONTINUE WITH</div>
                     <div className="social-buttons">
                         <div ref={googleButtonRef} className="google-button-container"></div>
-                        <button className="social-button">
+                        {/* <button className="social-button">
                             <span className="icon github-icon"></span>
                             GitHub
-                        </button>
+                        </button> */}
                     </div>
                 </div>
             </div>

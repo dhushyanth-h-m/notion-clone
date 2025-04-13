@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import './Login.css';
 import { useAuth } from '../../context/AuthContext';
+import { authApi } from '../../api';
 
 interface LoginFormData {
     email: string;
@@ -52,25 +53,12 @@ const Login: React.FC = () => {
 
         if (validate()) {
             try {
-                const response = await fetch('http://localhost:5001/auth/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(formData),
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    console.log('Login successful', data);
-                    login(data.token);
-                } else {
-                    setErrors({ email: data.message });
-                }
-            } catch (error) {
+                const data = await authApi.login(formData.email, formData.password);
+                console.log('Login successful', data);
+                login(data.token);
+            } catch (error: any) {
                 console.log('Login failed', error);
-                setErrors({ email: 'Login failed. Please try again.' });
+                setErrors({ email: error.response?.data?.message || 'Login failed. Please try again.' });
             }
         }
     };
@@ -84,7 +72,7 @@ const Login: React.FC = () => {
                         type="email"
                         id="email"
                         name="email"
-                        placeholder="m@example.com"
+                        placeholder="Enter your email address..."
                         value={formData.email}
                         onChange={handleChange}
                         className={errors.email ? 'error' : ''}
@@ -99,6 +87,7 @@ const Login: React.FC = () => {
                             type={showPassword ? "text" : "password"}
                             id="password"
                             name="password"
+                            placeholder='Enter your password...'
                             value={formData.password}
                             onChange={handleChange}
                             className={errors.password ? 'error' : ''}
