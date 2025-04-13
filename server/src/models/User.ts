@@ -1,117 +1,127 @@
 import { Pool } from 'pg';
 import bcryptjs from 'bcryptjs';
 import dotenv from 'dotenv';
+import { DataTypes, Model, Sequelize } from 'sequelize';
 
 dotenv.config();
 
-// Log database connection information for debugging
-console.log('Database connection info:');
-console.log(`Host: ${process.env.POSTGRES_HOST || 'localhost'}`);
-console.log(`Port: ${process.env.POSTGRES_PORT || '5432'}`); 
-console.log(`Database: ${process.env.POSTGRES_DB || 'notion_clone'}`);
-console.log(`User: ${process.env.POSTGRES_USER || 'postgres'}`);
-
-// Create connection string
+// Direct database connection for custom queries if needed
 const connectionString = `postgres://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'postgres'}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'notion_clone'}`;
-console.log('Connecting with:', connectionString);
-
 const pool = new Pool({ connectionString });
 
-// Test database connection immediately
-pool.query('SELECT NOW()', (err, res) => {
-    if (err) {
-        console.error('Database connection error:', err);
-    } else {
-        console.log('Database connected successfully at:', res.rows[0].now);
-    }
-});
-
-const createUsersTable = async () => {
-    const createTableQuery = `
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(100) NOT NULL,
-            email VARCHAR(100) UNIQUE NOT NULL,
-            password VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        )
-    `;
-
-    try {
-        await pool.query(createTableQuery);
-        console.log('Users table created successfully');
-    } catch (error) {
-        console.error('Error creating users table', error);
-        throw error;
-    }
-};
-
-const initDb = async () => {
-    await createUsersTable();
-};
-
-export interface User {
-    id: number;
-    name: string;
-    email: string;
-    password: string;
-    created_at?: Date;
-    updated_at?: Date;
+export interface UserAttributes {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
+  google_id?: string;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
-export default {
-    init: initDb,
+class User extends Model<UserAttributes> {
+  public id!: number;
+  public name!: string;
+  public email!: string;
+  public password!: string;
+  public google_id?: string;
+  public created_at!: Date;
+  public updated_at!: Date;
 
-    async findByEmail(email: string): Promise<User | null> {
-        const query = 'SELECT * FROM users WHERE email = $1';
-        const result = await pool.query(query, [email]);
-        return result.rows[0] || null;
-    },
+  // Static method to initialize the model
+  static initialize(sequelize: Sequelize) {
+    User.init(
+      {
+        id: {
+          type: DataTypes.INTEGER,
+          autoIncrement: true,
+          primaryKey: true,
+        },
+        name: {
+          type: DataTypes.STRING(100),
+          allowNull: false,
+        },
+        email: {
+          type: DataTypes.STRING(100),
+          allowNull: false,
+          unique: true,
+        },
+        password: {
+          type: DataTypes.STRING(255),
+          allowNull: false,
+        },
+        google_id: {
+          type: DataTypes.STRING,
+          allowNull: true,
+        },
+        created_at: {
+          type: DataTypes.DATE,
+          allowNull: false,
+          defaultValue: DataTypes.NOW,
+        },
+        updated_at: {
+          type: DataTypes.DATE,
+          allowNull: false,
+          defaultValue: DataTypes.NOW,
+        },
+      },
+      {
+        sequelize,
+        tableName: 'users',
+        timestamps: true,
+        underscored: true, // Use snake_case for column names
+      }
+    );
 
-    async findById(id: number): Promise<User | null> {
-        const query = 'SELECT * FROM users WHERE id = $1';
-        const result = await pool.query(query, [id]);
-        return result.rows[0] || null;
-    },
+    // Hash password before saving
+    User.beforeCreate(async (user: User) => {
+      const salt = await bcryptjs.genSalt(10);
+      user.password = await bcryptjs.hash(user.password, salt);
+    });
 
-    async create(userData: { name: string, email: string; password: string}): Promise<User> {
+    return User;
+  }
 
-        const salt = await bcryptjs.genSalt(10);
-        const hashedPassword = await bcryptjs.hash(userData.password, salt);
+  // Find a user by email
+  static async findByEmail(email: string): Promise<User | null> {
+    return await User.findOne({ where: { email } });
+  }
 
-        const query = `
-            INSERT INTO users (name, email, password)
-            VALUES ($1, $2, $3)
-            RETURNING *    
-        `;
-        
-        const values = [userData.name, userData.email, hashedPassword];
-        const result = await pool.query(query, values);
-        return result.rows[0];
-    },
+  // Find a user by ID
+  static async findById(id: number): Promise<User | null> {
+    return await User.findByPk(id);
+  }
 
-    async comparePassword(password: string, hashedPassword: string): Promise<boolean> {
-        return bcryptjs.compare(password, hashedPassword);
-    },
+  // Create a new user
+  static async create(userData: { name: string, email: string, password: string }): Promise<User> {
+    return await User.create(userData);
+  }
 
-    async createWithGoogle(userData: { name: string, email: string, googleId: string }): Promise<User> {
-        const query = `
-            INSERT INTO users (name, email, password, google_id)
-            VALUES ($1, $2, $3, $4)
-            RETURNING *    
-        `;
-        
-        // Generate a random password for Google users
-        const randomPassword = Math.random().toString(36).slice(-8);
-        const salt = await bcryptjs.genSalt(10);
-        const hashedPassword = await bcryptjs.hash(randomPassword, salt);
-        
-        const values = [userData.name, userData.email, hashedPassword, userData.googleId];
-        const result = await pool.query(query, values);
-        return result.rows[0];
-    }
-};
+  // Compare password
+  static async comparePassword(password: string, hashedPassword: string): Promise<boolean> {
+    return await bcryptjs.compare(password, hashedPassword);
+  }
+
+  // Compare a password with this user's password
+  async comparePassword(password: string): Promise<boolean> {
+    return await bcryptjs.compare(password, this.password);
+  }
+
+  // Create a user with Google
+  static async createWithGoogle(userData: { name: string, email: string, googleId: string }): Promise<User> {
+    // Generate a random password for Google users
+    const randomPassword = Math.random().toString(36).slice(-8);
+    
+    return await User.create({
+      name: userData.name,
+      email: userData.email,
+      password: randomPassword,
+      google_id: userData.googleId
+    });
+  }
+}
+
+export default User;
 
 
 
