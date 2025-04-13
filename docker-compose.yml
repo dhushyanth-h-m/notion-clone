@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   client:
     build: ./client
@@ -21,8 +19,11 @@ services:
     ports:
       - "5001:5001"
     volumes:
-      - ./server:/app
+      - ./server/src:/app/src
+      - ./server/package.json:/app/package.json
+      - ./server/tsconfig.json:/app/tsconfig.json
       - /app/node_modules
+      - /app/dist
     depends_on:
       - postgres
     environment:
@@ -36,7 +37,7 @@ services:
       - app-network
 
   postgres:
-    image: postgres:17
+    image: postgres:latest
     container_name: notion-postgres
     environment:
       POSTGRES_USER: postgres

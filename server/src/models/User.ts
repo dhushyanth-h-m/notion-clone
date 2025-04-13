@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import bcryptjs from 'bcryptjs';
 import dotenv from 'dotenv';
-import { DataTypes, Model, Sequelize } from 'sequelize';
+import { DataTypes, Model, Sequelize, CreateOptions } from 'sequelize';
 
 dotenv.config();
 
@@ -10,7 +10,7 @@ const connectionString = `postgres://${process.env.POSTGRES_USER || 'postgres'}:
 const pool = new Pool({ connectionString });
 
 export interface UserAttributes {
-  id: number;
+  id: string;
   name: string;
   email: string;
   password: string;
@@ -19,8 +19,15 @@ export interface UserAttributes {
   updated_at?: Date;
 }
 
-class User extends Model<UserAttributes> {
-  public id!: number;
+export interface UserCreationAttributes {
+  name: string;
+  email: string;
+  password: string;
+  google_id?: string;
+}
+
+class User extends Model<UserAttributes, UserCreationAttributes> {
+  public id!: string;
   public name!: string;
   public email!: string;
   public password!: string;
@@ -33,8 +40,8 @@ class User extends Model<UserAttributes> {
     User.init(
       {
         id: {
-          type: DataTypes.INTEGER,
-          autoIncrement: true,
+          type: DataTypes.UUID,
+          defaultValue: DataTypes.UUIDV4,
           primaryKey: true,
         },
         name: {
@@ -88,12 +95,12 @@ class User extends Model<UserAttributes> {
   }
 
   // Find a user by ID
-  static async findById(id: number): Promise<User | null> {
+  static async findById(id: string): Promise<User | null> {
     return await User.findByPk(id);
   }
 
-  // Create a new user
-  static async create(userData: { name: string, email: string, password: string }): Promise<User> {
+  // Create a user (renamed to createUser to avoid conflicts with Sequelize's create method)
+  static async createUser(userData: { name: string, email: string, password: string }): Promise<User> {
     return await User.create(userData);
   }
 

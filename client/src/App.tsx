@@ -8,18 +8,36 @@ import Auth from './pages/Auth/Auth';
 import Pages from './pages/Pages/Pages';
 import './App.css';
 
-const ProtectedRoute: React.FC<{ element: JSX.Element }> = ({ element }) => {
-  const { isAuthenticated, loading } = useAuth();
+const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
+  const { isAuthenticated, loading, serverError } = useAuth();
 
   if (loading) {
     return <div className="loading">Loading...</div>;
+  }
+
+  if (serverError && isAuthenticated) {
+    return element;
   }
 
   return isAuthenticated ? element : <Navigate to="/login" />;
 };
 
 const AppRoutes = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading, serverError } = useAuth();
+
+  if (loading) {
+    return <div className="loading">Loading...</div>;
+  }
+
+  if (serverError && !isAuthenticated) {
+    return (
+      <div className="server-error">
+        <h2>Server Connection Error</h2>
+        <p>Unable to connect to the authentication server. Please try again later.</p>
+        <button onClick={() => window.location.reload()}>Retry</button>
+      </div>
+    );
+  }
 
   return (
     <Routes>

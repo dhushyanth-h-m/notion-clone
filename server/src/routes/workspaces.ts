@@ -1,8 +1,9 @@
-import express from 'express';
+import express, { Request, Response, RequestHandler } from 'express';
 import { Workspace, WorkspaceMember, Block, User } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import { authenticate } from '../middleware/auth';
 import sequelize from '../config/database';
+import { WorkspaceRole } from '../models/WorkspaceMemberModel';
 
 const router = express.Router();
 
@@ -11,15 +12,16 @@ const router = express.Router();
  * @desc    Create a new workspace
  * @access  Private
  */
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, ((async (req: Request, res: Response) => {
   const { name, icon } = req.body;
   
   // Validate required fields
   if (!name) {
-    return res.status(400).json({ 
+    res.status(400).json({ 
       success: false,
       message: 'Workspace name is required'
     });
+    return;
   }
   
   // Start a transaction
@@ -38,7 +40,7 @@ router.post('/', authenticate, async (req, res) => {
     await WorkspaceMember.create({
       workspace_id: workspace.id,
       user_id: req.user.id,
-      role: 'owner'
+      role: 'owner' as WorkspaceRole
     }, { transaction });
     
     // Create a root page block for the workspace
@@ -71,28 +73,28 @@ router.post('/', authenticate, async (req, res) => {
       ]
     });
     
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
       data: result
     });
-  } catch (error) {
+  } catch (error: unknown) {
     // Rollback transaction on error
     await transaction.rollback();
     console.error('Error creating workspace:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: 'Error creating workspace',
-      error: error.message
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-});
+}) as RequestHandler));
 
 /**
  * @route   GET /api/workspaces
  * @desc    Get all workspaces for the current user
  * @access  Private
  */
-router.get('/', authenticate, async (req, res) => {
+router.get('/', authenticate, ((async (req: Request, res: Response) => {
   try {
     // Find all workspaces where the user is a member
     const memberships = await WorkspaceMember.findAll({
@@ -100,28 +102,29 @@ router.get('/', authenticate, async (req, res) => {
       include: [{ model: Workspace, as: 'workspace' }]
     });
     
-    const workspaces = memberships.map(membership => membership.workspace);
+    // Access the relationship through the association property
+    const workspaces = memberships.map(membership => membership.get('workspace'));
     
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: workspaces
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching workspaces:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: 'Error fetching workspaces',
-      error: error.message
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-});
+}) as RequestHandler));
 
 /**
  * @route   GET /api/workspaces/:id
  * @desc    Get a workspace by ID
  * @access  Private
  */
-router.get('/:id', authenticate, async (req, res) => {
+router.get('/:id', authenticate, ((async (req: Request, res: Response) => {
   try {
     // Check if user is a member of the workspace
     const membership = await WorkspaceMember.findOne({
@@ -132,10 +135,11 @@ router.get('/:id', authenticate, async (req, res) => {
     });
     
     if (!membership) {
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         message: 'You do not have access to this workspace'
       });
+      return;
     }
     
     // Get the workspace with its members and root blocks
@@ -156,32 +160,33 @@ router.get('/:id', authenticate, async (req, res) => {
     });
     
     if (!workspace) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Workspace not found'
       });
+      return;
     }
     
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: workspace
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching workspace:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: 'Error fetching workspace',
-      error: error.message
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-});
+}) as RequestHandler));
 
 /**
  * @route   PUT /api/workspaces/:id
  * @desc    Update a workspace
  * @access  Private
  */
-router.put('/:id', authenticate, async (req, res) => {
+router.put('/:id', authenticate, ((async (req: Request, res: Response) => {
   const { name, icon } = req.body;
   const workspaceId = req.params.id;
   
@@ -191,64 +196,137 @@ router.put('/:id', authenticate, async (req, res) => {
       where: { 
         workspace_id: workspaceId,
         user_id: req.user.id,
-        role: ['owner', 'admin']
+        role: ['owner', 'admin'] as unknown as WorkspaceRole
       }
     });
     
     if (!membership) {
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         message: 'You do not have permission to update this workspace'
       });
+      return;
     }
     
-    // Get the workspace
+    // Find the workspace
     const workspace = await Workspace.findByPk(workspaceId);
     
     if (!workspace) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Workspace not found'
       });
+      return;
     }
     
-    // Update the workspace
+    // Update workspace fields
     const updateData: any = {};
     if (name) updateData.name = name;
     if (icon !== undefined) updateData.icon = icon;
     
     await workspace.update(updateData);
     
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: workspace
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error updating workspace:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: 'Error updating workspace',
-      error: error.message
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-});
+}) as RequestHandler));
+
+/**
+ * @route   DELETE /api/workspaces/:id
+ * @desc    Delete a workspace
+ * @access  Private
+ */
+router.delete('/:id', authenticate, ((async (req: Request, res: Response) => {
+  const workspaceId = req.params.id;
+  
+  // Start a transaction
+  const transaction = await sequelize.transaction();
+  
+  try {
+    // Check if user is the owner of the workspace
+    const membership = await WorkspaceMember.findOne({
+      where: { 
+        workspace_id: workspaceId,
+        user_id: req.user.id,
+        role: 'owner' as WorkspaceRole
+      }
+    });
+    
+    if (!membership) {
+      await transaction.rollback();
+      res.status(403).json({
+        success: false,
+        message: 'Only the workspace owner can delete it'
+      });
+      return;
+    }
+    
+    // Find the workspace
+    const workspace = await Workspace.findByPk(workspaceId);
+    
+    if (!workspace) {
+      await transaction.rollback();
+      res.status(404).json({
+        success: false,
+        message: 'Workspace not found'
+      });
+      return;
+    }
+    
+    // Delete all blocks in the workspace
+    await Block.update(
+      { is_deleted: true },
+      { where: { workspace_id: workspaceId }, transaction }
+    );
+    
+    // Delete all workspace members
+    await WorkspaceMember.destroy({
+      where: { workspace_id: workspaceId },
+      transaction
+    });
+    
+    // Delete the workspace
+    await workspace.destroy({ transaction });
+    
+    // Commit the transaction
+    await transaction.commit();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Workspace deleted successfully'
+    });
+  } catch (error: unknown) {
+    // Rollback transaction on error
+    await transaction.rollback();
+    console.error('Error deleting workspace:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting workspace',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}) as RequestHandler));
 
 /**
  * @route   POST /api/workspaces/:id/members
  * @desc    Add a member to a workspace
  * @access  Private
  */
-router.post('/:id/members', authenticate, async (req, res) => {
+router.post('/:id/members', authenticate, ((async (req: Request, res: Response) => {
   const { email, role = 'viewer' } = req.body;
   const workspaceId = req.params.id;
   
-  // Validate required fields
-  if (!email) {
-    return res.status(400).json({ 
-      success: false,
-      message: 'Email is required'
-    });
-  }
+  // Start a transaction
+  const transaction = await sequelize.transaction();
   
   try {
     // Check if user is an admin or owner of the workspace
@@ -256,163 +334,72 @@ router.post('/:id/members', authenticate, async (req, res) => {
       where: { 
         workspace_id: workspaceId,
         user_id: req.user.id,
-        role: ['owner', 'admin']
+        role: ['owner', 'admin'] as unknown as WorkspaceRole
       }
     });
     
     if (!membership) {
-      return res.status(403).json({
+      await transaction.rollback();
+      res.status(403).json({
         success: false,
-        message: 'You do not have permission to add members to this workspace'
+        message: 'You do not have permission to add members'
       });
+      return;
     }
     
-    // Find the user to add
-    const userToAdd = await User.findOne({ where: { email } });
+    // Find the user by email
+    const user = await User.findOne({ where: { email } });
     
-    if (!userToAdd) {
-      return res.status(404).json({
+    if (!user) {
+      await transaction.rollback();
+      res.status(404).json({
         success: false,
         message: 'User not found'
       });
+      return;
     }
     
-    // Check if the user is already a member
+    // Check if user is already a member
     const existingMember = await WorkspaceMember.findOne({
       where: { 
         workspace_id: workspaceId,
-        user_id: userToAdd.id
+        user_id: user.id
       }
     });
     
     if (existingMember) {
-      return res.status(400).json({
+      await transaction.rollback();
+      res.status(400).json({
         success: false,
         message: 'User is already a member of this workspace'
       });
+      return;
     }
     
-    // Add the user as a member
-    await WorkspaceMember.create({
+    // Add the member
+    const member = await WorkspaceMember.create({
       workspace_id: workspaceId,
-      user_id: userToAdd.id,
-      role
-    });
+      user_id: user.id,
+      role: role as WorkspaceRole
+    }, { transaction });
     
-    return res.status(201).json({
+    // Commit the transaction
+    await transaction.commit();
+    
+    res.status(201).json({
       success: true,
-      message: 'Member added successfully'
+      data: member
     });
-  } catch (error) {
+  } catch (error: unknown) {
+    // Rollback transaction on error
+    await transaction.rollback();
     console.error('Error adding member:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: 'Error adding member',
-      error: error.message
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-});
-
-/**
- * @route   DELETE /api/workspaces/:id/members/:userId
- * @desc    Remove a member from a workspace
- * @access  Private
- */
-router.delete('/:id/members/:userId', authenticate, async (req, res) => {
-  const workspaceId = req.params.id;
-  const userIdToRemove = req.params.userId;
-  
-  try {
-    // Check if user is an admin or owner of the workspace
-    const membership = await WorkspaceMember.findOne({
-      where: { 
-        workspace_id: workspaceId,
-        user_id: req.user.id,
-        role: ['owner', 'admin']
-      }
-    });
-    
-    // Special case: owners can't be removed except by themselves
-    if (userIdToRemove === req.user.id) {
-      // User is removing themselves
-      const memberToRemove = await WorkspaceMember.findOne({
-        where: { 
-          workspace_id: workspaceId,
-          user_id: userIdToRemove
-        }
-      });
-      
-      if (memberToRemove && memberToRemove.role === 'owner') {
-        // Count owners
-        const ownerCount = await WorkspaceMember.count({
-          where: { 
-            workspace_id: workspaceId,
-            role: 'owner'
-          }
-        });
-        
-        if (ownerCount <= 1) {
-          return res.status(400).json({
-            success: false,
-            message: 'Cannot remove the last owner from a workspace'
-          });
-        }
-      }
-      
-      await memberToRemove?.destroy();
-      
-      return res.status(200).json({
-        success: true,
-        message: 'You have left the workspace'
-      });
-    }
-    
-    // Otherwise, normal permission check
-    if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
-      return res.status(403).json({
-        success: false,
-        message: 'You do not have permission to remove members from this workspace'
-      });
-    }
-    
-    // Find the member to remove
-    const memberToRemove = await WorkspaceMember.findOne({
-      where: { 
-        workspace_id: workspaceId,
-        user_id: userIdToRemove
-      }
-    });
-    
-    if (!memberToRemove) {
-      return res.status(404).json({
-        success: false,
-        message: 'Member not found'
-      });
-    }
-    
-    // Admin can't remove owner
-    if (membership.role === 'admin' && memberToRemove.role === 'owner') {
-      return res.status(403).json({
-        success: false,
-        message: 'Admins cannot remove owners from a workspace'
-      });
-    }
-    
-    // Remove the member
-    await memberToRemove.destroy();
-    
-    return res.status(200).json({
-      success: true,
-      message: 'Member removed successfully'
-    });
-  } catch (error) {
-    console.error('Error removing member:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error removing member',
-      error: error.message
-    });
-  }
-});
+}) as RequestHandler));
 
 export default router; 

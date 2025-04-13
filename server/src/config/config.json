@@ -3,7 +3,7 @@
     "username": "postgres",
     "password": "postgres",
     "database": "notion_clone",
-    "host": "localhost",
+    "host": "postgres",
     "dialect": "postgres"
   },
   "test": {

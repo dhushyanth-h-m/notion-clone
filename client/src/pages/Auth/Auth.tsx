@@ -20,8 +20,14 @@ declare global {
 
 const Auth: React.FC = () => {
     const [isLoginActive, setIsLoginActive] = useState(true);
-    const { login } = useAuth();
+    const { login, isAuthenticated, serverError } = useAuth();
     const googleButtonRef = useRef<HTMLDivElement>(null);
+    const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
+
+    // Log authentication state for debugging
+    useEffect(() => {
+        console.log("Auth component - isAuthenticated:", isAuthenticated);
+    }, [isAuthenticated]);
 
     const toggleAuth = () => {
         setIsLoginActive(!isLoginActive);
@@ -31,6 +37,11 @@ const Auth: React.FC = () => {
     const initializeGoogleSignIn = () => {
         if (window.google && googleButtonRef.current) {
             try {
+                console.log("Initializing Google Sign-In...");
+                // Get hostname for correct origin validation
+                const origin = window.location.origin;
+                console.log("Current origin:", origin);
+                
                 window.google.accounts.id.initialize({
                     client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID || '682799088248-33ao10nip4lhf9d0ja113nnofse0o1ke.apps.googleusercontent.com',
                     callback: handleGoogleSignIn,
@@ -47,12 +58,16 @@ const Auth: React.FC = () => {
                         text: 'continue_with',
                         shape: 'rectangular',
                         logo_alignment: 'left',
-                        width: '100%'
+                        width: 250 // Fixed width instead of percentage
                     }
                 );
+                console.log("Google Sign-In button rendered");
             } catch (error) {
                 console.error('Error initializing Google Sign-In:', error);
+                setGoogleAuthError('Failed to initialize Google Sign-In');
             }
+        } else {
+            console.log("Google API not available yet or button ref not ready");
         }
     };
 
@@ -84,16 +99,51 @@ const Auth: React.FC = () => {
 
     const handleGoogleSignIn = async (response: any) => {
         try {
-            console.log("Google sign-in response:", response);
-            const data = await authApi.loginWithGoogle(response.credential);
+            console.log("Google sign-in response received:", response);
+            setGoogleAuthError(null);
             
-            if (data.token) {
-                login(data.token);
-            } else {
-                console.error('Google login failed: No token in response');
+            if (!response.credential) {
+                console.error("No credential in Google response");
+                setGoogleAuthError('Google authentication failed: No credential received');
+                return;
+            }
+            
+            // If the server is already known to be down, don't make the API call
+            if (serverError) {
+                setGoogleAuthError('Server connection error. Please try again later.');
+                return;
+            }
+            
+            console.log("Sending Google token to backend...");
+            try {
+                const data = await authApi.loginWithGoogle(response.credential);
+                
+                console.log("Backend response:", data);
+                
+                if (data.token) {
+                    console.log("Token received, calling login()");
+                    login(data.token);
+                    console.log("Login function called");
+                } else {
+                    console.error('Google login failed: No token in response');
+                    setGoogleAuthError('Google login failed: No token in response');
+                }
+            } catch (error) {
+                console.error('Google login error:', error);
+                // Log more details about the error
+                if (error.response) {
+                    console.error('Error response:', error.response.data);
+                    console.error('Error status:', error.response.status);
+                    setGoogleAuthError(`Server error: ${error.response.status} ${error.response.data?.message || ''}`);
+                } else if (error.code === 'ERR_NETWORK') {
+                    setGoogleAuthError('Cannot connect to server. Please try again later.');
+                } else {
+                    setGoogleAuthError('An error occurred during Google login');
+                }
             }
         } catch (error) {
-            console.error('Google login error:', error);
+            console.error('Google sign-in handler error:', error);
+            setGoogleAuthError('An unexpected error occurred');
         }
     };
 
@@ -127,10 +177,16 @@ const Auth: React.FC = () => {
                     <div className="social-login-text">OR CONTINUE WITH</div>
                     <div className="social-buttons">
                         <div ref={googleButtonRef} className="google-button-container"></div>
-                        {/* <button className="social-button">
-                            <span className="icon github-icon"></span>
-                            GitHub
-                        </button> */}
+                        {googleAuthError && (
+                            <div className="google-auth-error">
+                                {googleAuthError}
+                            </div>
+                        )}
+                        {serverError && (
+                            <div className="server-connection-error">
+                                Server connection error. Email/password login may still work.
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
