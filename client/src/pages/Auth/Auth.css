@@ -1,0 +1,52 @@
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f0f0f0;
+}
+
+.auth-card {
+    width: 400px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.auth-tabs {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+}
+
+
+.auth-tab {
+    flex: 1;
+    padding: 15px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    background: none;
+    border: none;
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+}
+
+.auth-tab.active {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #007bff;
+}
+
+.auth-content {
+    padding: 20px;
+}
+
+
+
+
+
+
+
+
+
+

@@ -93,6 +93,23 @@ export default {
 
     async comparePassword(password: string, hashedPassword: string): Promise<boolean> {
         return bcryptjs.compare(password, hashedPassword);
+    },
+
+    async createWithGoogle(userData: { name: string, email: string, googleId: string }): Promise<User> {
+        const query = `
+            INSERT INTO users (name, email, password, google_id)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *    
+        `;
+        
+        // Generate a random password for Google users
+        const randomPassword = Math.random().toString(36).slice(-8);
+        const salt = await bcryptjs.genSalt(10);
+        const hashedPassword = await bcryptjs.hash(randomPassword, salt);
+        
+        const values = [userData.name, userData.email, hashedPassword, userData.googleId];
+        const result = await pool.query(query, values);
+        return result.rows[0];
     }
 };
 

@@ -2,6 +2,7 @@ import express, { Request, Response, RequestHandler } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import { authenticateToken } from '../middleware/auth';
+import { jwtDecode } from 'jwt-decode';
 
 // Create router instance
 const router = express.Router();
@@ -104,5 +105,58 @@ router.get('/me',
       res.status(500).json({ message: 'Server error getting user profile' });
     }
   }) as RequestHandler);
+
+// Google authentication route
+router.post('/google', (async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+    
+    // Parse the JWT token using jwt-decode
+    const payload = jwtDecode(token);
+    // Extract user info from the payload
+    const { email, name, sub: googleId } = payload as { 
+      email: string; 
+      name: string; 
+      sub: string;
+    };
+    
+    console.log("Google auth attempt for:", email);
+    
+    // Check if user already exists
+    let user = await User.findByEmail(email);
+    
+    if (!user) {
+      // Create new user if not exists
+      console.log("Creating new user for Google auth:", email);
+      user = await User.createWithGoogle({
+        name,
+        email,
+        googleId
+      });
+    } else {
+      console.log("Existing user found for Google auth:", email);
+    }
+    
+    // Generate JWT token for your app
+    const appToken = jwt.sign(
+      { userId: user.id },
+      process.env.JWT_SECRET || 'your_jwt_secret',
+      { expiresIn: '7d' }
+    );
+    
+    res.json({
+      message: 'Google authentication successful',
+      token: appToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Google authentication error:', error);
+    res.status(500).json({ message: 'Server error during Google authentication' });
+  }
+}) as RequestHandler);
 
 export default router;

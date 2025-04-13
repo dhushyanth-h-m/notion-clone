@@ -1,19 +1,58 @@
-services: 
-  frontend: 
-    build: ./client
-    ports: 
-      - "3000:3000"
-    volumes: 
-      - ./client:/app
-    environment:
-      - REACT_APP_API_URL=http://localhost:5001
-    depends_on:
-      - backend
+version: '3'
 
-  backend: 
-    build: ./server 
-    ports: 
+services:
+  client:
+    build: ./client
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    depends_on:
+      - server
+    networks:
+      - app-network
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: notion-server
+    ports:
       - "5001:5001"
-    volumes: 
+    volumes:
       - ./server:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+    environment:
+      - JWT_SECRET=your_secure_jwt_secret_key
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=notion_clone
+      - POSTGRES_PORT=5432
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:17
+    container_name: notion-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: notion_clone
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
 
