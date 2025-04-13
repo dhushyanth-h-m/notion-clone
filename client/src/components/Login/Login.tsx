@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import './Login.css';
-import GoogleLoginButton from '../GoogleLogin/GoogleLoginButton';
 import { useAuth } from '../../context/AuthContext';
 
 interface LoginFormData {
     email: string;
     password: string;
+    rememberMe: boolean;
 }
 
 const Login: React.FC = () => {
@@ -13,19 +13,25 @@ const Login: React.FC = () => {
     const [formData, setFormData] = useState<LoginFormData> ({
         email: '',
         password: '',
+        rememberMe: false
     });
-    const [errors, setErrors] = useState<Partial<LoginFormData>>({});
+    const [errors, setErrors] = useState<Partial<Omit<LoginFormData, 'rememberMe'>>>({});
+    const [showPassword, setShowPassword] = useState(false);
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
+        const { name, value, type, checked } = e.target;
         setFormData({
             ...formData,
-            [name]: value,
+            [name]: type === 'checkbox' ? checked : value,
         });
     };
 
+    const togglePasswordVisibility = () => {
+        setShowPassword(!showPassword);
+    };
+
     const validate = (): boolean => {
-        const newErrors: Partial<LoginFormData> = {};
+        const newErrors: Partial<Omit<LoginFormData, 'rememberMe'>> = {};
 
         if (!formData.email) {
             newErrors.email = 'Email is required';
@@ -71,7 +77,6 @@ const Login: React.FC = () => {
 
     return (
         <div className="login-form">
-            <h2>Login to Your Account</h2>
             <form onSubmit={handleSubmit}>
                 <div className="form-group">
                     <label htmlFor="email">Email</label>
@@ -79,6 +84,7 @@ const Login: React.FC = () => {
                         type="email"
                         id="email"
                         name="email"
+                        placeholder="m@example.com"
                         value={formData.email}
                         onChange={handleChange}
                         className={errors.email ? 'error' : ''}
@@ -88,25 +94,41 @@ const Login: React.FC = () => {
 
                 <div className="form-group">
                     <label htmlFor="password">Password</label>
-                    <input 
-                        type="password"
-                        id="password"
-                        name="password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        className={errors.password ? 'error' : ''}
-                    />
+                    <div className="password-input-container">
+                        <input 
+                            type={showPassword ? "text" : "password"}
+                            id="password"
+                            name="password"
+                            value={formData.password}
+                            onChange={handleChange}
+                            className={errors.password ? 'error' : ''}
+                        />
+                        <span 
+                            className="password-toggle-icon" 
+                            onClick={togglePasswordVisibility}
+                        >
+                            {showPassword ? '👁️' : '👁️‍🗨️'}
+                        </span>
+                    </div>
                     {errors.password && <span className="error-message">{errors.password}</span>}
                 </div>
 
-                <button type="submit" className='login-button'>Login</button>
+                <div className="form-options">
+                    <div className="remember-me">
+                        <input 
+                            type="checkbox" 
+                            id="rememberMe" 
+                            name="rememberMe"
+                            checked={formData.rememberMe}
+                            onChange={handleChange}
+                        />
+                        <label htmlFor="rememberMe">Remember me</label>
+                    </div>
+                    <a href="#" className="forgot-password">Forgot password?</a>
+                </div>
+
+                <button type="submit" className="login-button">Sign In</button>
             </form>
-            
-            <div className="separator">
-                <span>OR</span>
-            </div>
-            
-            <GoogleLoginButton />
         </div>
     );
 };

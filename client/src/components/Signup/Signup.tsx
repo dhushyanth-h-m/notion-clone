@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import './Signup.css';
-import GoogleLoginButton from '../GoogleLogin/GoogleLoginButton';
 
 interface SignupFormData {
   name: string;
@@ -17,6 +16,8 @@ const Signup: React.FC = () => {
     confirmPassword: ''
   });
   const [errors, setErrors] = useState<Partial<SignupFormData>>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -24,6 +25,14 @@ const Signup: React.FC = () => {
       ...formData,
       [name]: value
     });
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
+  const toggleConfirmPasswordVisibility = () => {
+    setShowConfirmPassword(!showConfirmPassword);
   };
 
   const validate = (): boolean => {
@@ -91,7 +100,6 @@ const Signup: React.FC = () => {
 
   return (
     <div className="signup-form">
-      <h2>Create an Account</h2>
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="name">Name</label>
@@ -99,6 +107,7 @@ const Signup: React.FC = () => {
             type="text"
             id="name"
             name="name"
+            placeholder="Your name"
             value={formData.name}
             onChange={handleChange}
             className={errors.name ? 'error' : ''}
@@ -112,6 +121,7 @@ const Signup: React.FC = () => {
             type="email"
             id="email"
             name="email"
+            placeholder="m@example.com"
             value={formData.email}
             onChange={handleChange}
             className={errors.email ? 'error' : ''}
@@ -121,38 +131,48 @@ const Signup: React.FC = () => {
         
         <div className="form-group">
           <label htmlFor="password">Password</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            className={errors.password ? 'error' : ''}
-          />
+          <div className="password-input-container">
+            <input
+              type={showPassword ? "text" : "password"}
+              id="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              className={errors.password ? 'error' : ''}
+            />
+            <span 
+              className="password-toggle-icon"
+              onClick={togglePasswordVisibility}
+            >
+              {showPassword ? '👁️' : '👁️‍🗨️'}
+            </span>
+          </div>
           {errors.password && <span className="error-message">{errors.password}</span>}
         </div>
         
         <div className="form-group">
           <label htmlFor="confirmPassword">Confirm Password</label>
-          <input
-            type="password"
-            id="confirmPassword"
-            name="confirmPassword"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            className={errors.confirmPassword ? 'error' : ''}
-          />
+          <div className="password-input-container">
+            <input
+              type={showConfirmPassword ? "text" : "password"}
+              id="confirmPassword"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              className={errors.confirmPassword ? 'error' : ''}
+            />
+            <span 
+              className="password-toggle-icon"
+              onClick={toggleConfirmPasswordVisibility}
+            >
+              {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+            </span>
+          </div>
           {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
         </div>
         
         <button type="submit" className="signup-button">Sign Up</button>
       </form>
-      
-      <div className="separator">
-        <span>OR</span>
-      </div>
-      
-      <GoogleLoginButton />
     </div>
   );
 };
