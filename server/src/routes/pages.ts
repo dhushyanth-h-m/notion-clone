@@ -3,8 +3,15 @@ import { authenticateToken } from '../middleware/auth';
 import { Pool } from 'pg';
 import Page from '../models/Page';
 
+// Force Docker mode when running in container
+process.env.RUNNING_IN_DOCKER = 'true';
+const isRunningInDocker = true;
+// Use postgres container name in Docker
+const dbHost = 'postgres';
+
 // Database connection
-const connectionString = `postgres://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'postgres'}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'notion_clone'}`;
+const connectionString = `postgres://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'postgres'}@${dbHost}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'notion_clone'}`;
+console.log(`Pages route connecting to PostgreSQL at ${connectionString}`);
 const pool = new Pool({ connectionString });
 
 // Create router instance
@@ -33,7 +40,7 @@ router.get(
   authenticateToken as RequestHandler,
   (async (req: Request, res: Response) => {
     try {
-      const pageId = parseInt(req.params.id);
+      const pageId = req.params.id;
       const userId = req.user.userId;
       
       const page = await Page.findByIdAndUserId(pageId, userId);
@@ -83,7 +90,7 @@ router.put(
   authenticateToken as RequestHandler,
   (async (req: Request, res: Response) => {
     try {
-      const pageId = parseInt(req.params.id);
+      const pageId = req.params.id;
       const userId = req.user.userId;
       const { title, content } = req.body;
       
@@ -110,7 +117,7 @@ router.delete(
   authenticateToken as RequestHandler,
   (async (req: Request, res: Response) => {
     try {
-      const pageId = parseInt(req.params.id);
+      const pageId = req.params.id;
       const userId = req.user.userId;
       
       const success = await Page.deletePage(pageId, userId);

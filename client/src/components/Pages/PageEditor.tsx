@@ -3,7 +3,7 @@ import { pagesApi, Page } from '../../api/pages';
 import './PageEditor.css';
 
 interface PageEditorProps {
-  pageId?: number;
+  pageId?: string;
   onPageSaved?: (page: Page) => void;
 }
 
@@ -28,7 +28,7 @@ const PageEditor: React.FC<PageEditorProps> = ({ pageId, onPageSaved }) => {
     }
   }, [pageId]);
 
-  const loadPage = async (id: number) => {
+  const loadPage = async (id: string) => {
     try {
       const page = await pagesApi.getPage(id);
       setTitle(page.title);

@@ -1,10 +1,10 @@
 import apiClient from './client';
 
 export interface Page {
-  id: number;
+  id: string;
   title: string;
   content: string;
-  user_id: number;
+  user_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -18,7 +18,7 @@ export const pagesApi = {
   },
   
   // Get a specific page by ID
-  getPage: async (pageId: number): Promise<Page> => {
+  getPage: async (pageId: string): Promise<Page> => {
     const response = await apiClient.get(`/pages/${pageId}`);
     return response.data;
   },
@@ -33,13 +33,13 @@ export const pagesApi = {
   },
   
   // Update a page
-  updatePage: async (pageId: number, data: { title?: string, content?: string }): Promise<Page> => {
+  updatePage: async (pageId: string, data: { title?: string, content?: string }): Promise<Page> => {
     const response = await apiClient.put(`/pages/${pageId}`, data);
     return response.data;
   },
   
   // Delete a page
-  deletePage: async (pageId: number): Promise<void> => {
+  deletePage: async (pageId: string): Promise<void> => {
     await apiClient.delete(`/pages/${pageId}`);
   }
 }; 

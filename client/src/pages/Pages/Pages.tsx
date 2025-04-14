@@ -10,14 +10,12 @@ const Pages: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated, loading: authLoading } = useAuth();
-  const [selectedPageId, setSelectedPageId] = useState<number | undefined>(
-    id ? parseInt(id) : undefined
-  );
+  const [selectedPageId, setSelectedPageId] = useState<string | undefined>(id || undefined);
 
   useEffect(() => {
     // Update selected page ID when URL changes
     if (id) {
-      setSelectedPageId(parseInt(id));
+      setSelectedPageId(id);
     } else {
       setSelectedPageId(undefined);
     }

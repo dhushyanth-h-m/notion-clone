@@ -6,7 +6,7 @@ import './PagesList.css';
 interface PagesListProps {
   onSelectPage: (page: Page) => void;
   onCreatePage: () => void;
-  selectedPageId?: number;
+  selectedPageId?: string;
 }
 
 const PagesList: React.FC<PagesListProps> = ({ onSelectPage, onCreatePage, selectedPageId }) => {
@@ -35,7 +35,7 @@ const PagesList: React.FC<PagesListProps> = ({ onSelectPage, onCreatePage, selec
     }
   };
 
-  const handleDeletePage = async (e: React.MouseEvent, pageId: number) => {
+  const handleDeletePage = async (e: React.MouseEvent, pageId: string) => {
     e.stopPropagation();
     if (!window.confirm('Are you sure you want to delete this page?')) {
       return;

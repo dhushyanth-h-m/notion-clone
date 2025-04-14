@@ -6,6 +6,7 @@ import { initDb } from './models';
 import authRoutes from './routes/auth';
 import blockRoutes from './routes/blocks';
 import workspaceRoutes from './routes/workspaces';
+import pageRoutes from './routes/pages';
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ console.log('Attempting to initialize database...');
 app.use('/auth', authRoutes);
 app.use('/api/blocks', blockRoutes);
 app.use('/api/workspaces', workspaceRoutes);
+app.use('/pages', pageRoutes);
 
 app.get('/', (req, res) => {
     res.send("Backend is running");

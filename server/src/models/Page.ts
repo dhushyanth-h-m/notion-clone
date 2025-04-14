@@ -4,24 +4,31 @@ import { DataTypes, Model, Sequelize } from 'sequelize';
 
 dotenv.config();
 
+// Force Docker mode when running in container
+process.env.RUNNING_IN_DOCKER = 'true';
+const isRunningInDocker = true;
+// Use postgres container name in Docker
+const dbHost = 'postgres';
+
 // Direct database connection for custom queries if needed
-const connectionString = `postgres://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'postgres'}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'notion_clone'}`;
+const connectionString = `postgres://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'postgres'}@${dbHost}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'notion_clone'}`;
+console.log(`Page model connecting to PostgreSQL at ${connectionString}`);
 const pool = new Pool({ connectionString });
 
 export interface PageAttributes {
-  id: number;
+  id: string;
   title: string;
   content: string;
-  user_id: number;
+  user_id: string;
   created_at?: Date;
   updated_at?: Date;
 }
 
 class Page extends Model<PageAttributes> {
-  public id!: number;
+  public id!: string;
   public title!: string;
   public content!: string;
-  public user_id!: number;
+  public user_id!: string;
   public created_at!: Date;
   public updated_at!: Date;
 
@@ -30,8 +37,8 @@ class Page extends Model<PageAttributes> {
     Page.init(
       {
         id: {
-          type: DataTypes.INTEGER,
-          autoIncrement: true,
+          type: DataTypes.UUID,
+          defaultValue: DataTypes.UUIDV4,
           primaryKey: true,
         },
         title: {
@@ -43,7 +50,7 @@ class Page extends Model<PageAttributes> {
           allowNull: true,
         },
         user_id: {
-          type: DataTypes.INTEGER,
+          type: DataTypes.UUID,
           allowNull: false,
           references: {
             model: 'users',
@@ -73,21 +80,21 @@ class Page extends Model<PageAttributes> {
   }
 
   // Helper method to find pages by user ID
-  static async findByUserId(userId: number) {
+  static async findByUserId(userId: string) {
     const query = 'SELECT * FROM pages WHERE user_id = $1 ORDER BY updated_at DESC';
     const result = await pool.query(query, [userId]);
     return result.rows;
   }
 
   // Helper method to find a page by ID and user ID (for authorization)
-  static async findByIdAndUserId(pageId: number, userId: number) {
+  static async findByIdAndUserId(pageId: string, userId: string) {
     const query = 'SELECT * FROM pages WHERE id = $1 AND user_id = $2';
     const result = await pool.query(query, [pageId, userId]);
     return result.rows[0] || null;
   }
 
   // Helper method to create a new page
-  static async createPage(pageData: { title: string, content: string, user_id: number }) {
+  static async createPage(pageData: { title: string, content: string, user_id: string }) {
     const query = `
       INSERT INTO pages (title, content, user_id)
       VALUES ($1, $2, $3)
@@ -100,7 +107,7 @@ class Page extends Model<PageAttributes> {
   }
 
   // Helper method to update a page
-  static async updatePage(pageId: number, userId: number, pageData: { title?: string, content?: string }) {
+  static async updatePage(pageId: string, userId: string, pageData: { title?: string, content?: string }) {
     // First check if page exists and belongs to user
     const page = await this.findByIdAndUserId(pageId, userId);
     if (!page) {
@@ -126,7 +133,7 @@ class Page extends Model<PageAttributes> {
   }
 
   // Helper method to delete a page
-  static async deletePage(pageId: number, userId: number) {
+  static async deletePage(pageId: string, userId: string) {
     // First check if page exists and belongs to user
     const page = await this.findByIdAndUserId(pageId, userId);
     if (!page) {
