@@ -4,9 +4,21 @@ import { authenticateToken } from '../middleware/auth';
 import { jwtDecode } from 'jwt-decode';
 import bcryptjs from 'bcryptjs';
 import { Pool } from 'pg';
+import { v4 as uuidv4 } from 'uuid';
 
 // Database connection
-const connectionString = `postgres://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'postgres'}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'notion_clone'}`;
+// Force Docker mode when running in container
+process.env.RUNNING_IN_DOCKER = 'true';
+const isRunningInDocker = true;
+// When running locally, connect to "localhost" for the host
+// When in Docker, connect to "postgres" container name
+const dbHost = 'postgres';
+
+console.log(`Connecting to PostgreSQL at ${dbHost}:${process.env.POSTGRES_PORT || '5432'}`);
+
+const connectionString = `postgres://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'postgres'}@${dbHost}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'notion_clone'}`;
+console.log(`Connection string: ${connectionString}`);
+
 const pool = new Pool({ connectionString });
 
 // Create router instance
@@ -20,7 +32,7 @@ const UserDB = {
     return result.rows[0] || null;
   },
 
-  async findById(id: number) {
+  async findById(id: string) {
     const query = 'SELECT * FROM users WHERE id = $1';
     const result = await pool.query(query, [id]);
     return result.rows[0] || null;
@@ -29,16 +41,44 @@ const UserDB = {
   async create(userData: { name: string, email: string, password: string }) {
     const salt = await bcryptjs.genSalt(10);
     const hashedPassword = await bcryptjs.hash(userData.password, salt);
+    
+    // Generate UUID for user
+    const userId = uuidv4();
+    
+    console.log("Creating regular user with UUID:", userId);
 
     const query = `
-      INSERT INTO users (name, email, password)
-      VALUES ($1, $2, $3)
+      INSERT INTO users (id, name, email, password, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *
     `;
     
-    const values = [userData.name, userData.email, hashedPassword];
-    const result = await pool.query(query, values);
-    return result.rows[0];
+    try {
+      // Use a transaction to ensure atomicity
+      const client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+        
+        const values = [userId, userData.name, userData.email, hashedPassword];
+        console.log("Insert values:", JSON.stringify(values));
+        
+        const result = await client.query(query, values);
+        await client.query('COMMIT');
+        
+        console.log("User created successfully:", result.rows[0].id);
+        return result.rows[0];
+      } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("Transaction error:", error);
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error("Database error in create:", error);
+      throw error;
+    }
   },
 
   async createWithGoogle(userData: { name: string, email: string, googleId: string }) {
@@ -46,15 +86,53 @@ const UserDB = {
     const salt = await bcryptjs.genSalt(10);
     const hashedPassword = await bcryptjs.hash(randomPassword, salt);
     
+    // Generate a valid UUID for the user
+    const userId = uuidv4();
+    
+    console.log("Creating user with UUID:", userId);
+    
+    // Build an SQL query that explicitly sets timestamps
     const query = `
-      INSERT INTO users (name, email, password, google_id)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO users 
+      (id, name, email, password, google_id, created_at, updated_at)
+      VALUES 
+      ($1, $2, $3, $4, $5, NOW(), NOW())
       RETURNING *
     `;
     
-    const values = [userData.name, userData.email, hashedPassword, userData.googleId];
-    const result = await pool.query(query, values);
-    return result.rows[0];
+    // Log everything for debugging
+    console.log("Query:", query);
+    
+    try {
+      // Use a transaction to ensure atomicity
+      const client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+        
+        const values = [userId, userData.name, userData.email, hashedPassword, userData.googleId];
+        console.log("Insert values:", JSON.stringify(values));
+        
+        const result = await client.query(query, values);
+        
+        // Log the result row to verify what was actually inserted
+        console.log("Insert result:", JSON.stringify(result.rows[0]));
+        
+        await client.query('COMMIT');
+        
+        console.log("User created successfully:", result.rows[0].id);
+        return result.rows[0];
+      } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("Transaction error:", error);
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error("Database error in createWithGoogle:", error);
+      throw error;
+    }
   },
 
   async comparePassword(password: string, hashedPassword: string) {
@@ -172,6 +250,10 @@ router.post('/google', (async (req: Request, res: Response) => {
   try {
     const { token } = req.body;
     
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' });
+    }
+    
     // Parse the JWT token using jwt-decode
     const payload = jwtDecode(token);
     // Extract user info from the payload
@@ -189,11 +271,24 @@ router.post('/google', (async (req: Request, res: Response) => {
     if (!user) {
       // Create new user if not exists
       console.log("Creating new user for Google auth:", email);
-      user = await UserDB.createWithGoogle({
-        name,
-        email,
-        googleId
-      });
+      
+      try {
+        user = await UserDB.createWithGoogle({
+          name,
+          email,
+          googleId
+        });
+        
+        console.log("New user created with ID:", user.id);
+      } catch (dbError: any) {
+        console.error("Database error during user creation:", dbError);
+        // Send more detailed error for debugging
+        return res.status(500).json({ 
+          message: 'Failed to create user account', 
+          error: dbError.message || 'Unknown database error',
+          code: dbError.code
+        });
+      }
     } else {
       console.log("Existing user found for Google auth:", email);
     }

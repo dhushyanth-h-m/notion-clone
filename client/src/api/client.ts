@@ -1,8 +1,7 @@
 import axios from 'axios';
 
-// Detect Docker environment - server is mapped to port 5001 in Docker
-const isDocker = window.location.hostname === 'localhost';
-const API_URL = process.env.REACT_APP_API_URL || (isDocker ? 'http://localhost:5001' : 'http://notion-server:5001');
+// Use environment variable or default to localhost
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 console.log("Using API URL:", API_URL);
 
@@ -14,7 +13,8 @@ const apiClient = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
-  }
+  },
+  withCredentials: false // Explicitly disable credentials for CORS
 });
 
 // Add auth token to every request

@@ -45,8 +45,10 @@ const Auth: React.FC = () => {
                 window.google.accounts.id.initialize({
                     client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID || '682799088248-33ao10nip4lhf9d0ja113nnofse0o1ke.apps.googleusercontent.com',
                     callback: handleGoogleSignIn,
-                    // Add this to allow testing in Docker/localhost
-                    allowed_parent_origin: window.location.origin
+                    auto_select: false,
+                    cancel_on_tap_outside: true,
+                    // These settings help with local development
+                    ux_mode: 'popup'
                 });
                 
                 window.google.accounts.id.renderButton(

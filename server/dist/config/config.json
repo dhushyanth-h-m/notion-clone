@@ -1,0 +1,24 @@
+{
+    "development": {
+        "username": "postgres",
+        "password": "postgres",
+        "database": "notion_clone",
+        "host": "localhost",
+        "dialect": "postgres"
+    },
+    "test": {
+        "username": "postgres",
+        "password": "postgres",
+        "database": "notion_clone_test",
+        "host": "localhost",
+        "dialect": "postgres"
+    },
+    "production": {
+        "username": "postgres",
+        "password": "postgres",
+        "database": "notion_clone",
+        "host": "postgres",
+        "dialect": "postgres",
+        "logging": false
+    }
+}

@@ -30,7 +30,7 @@ console.log('Attempting to initialize database...');
 })();
 
 // Routes
-app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
 app.use('/api/blocks', blockRoutes);
 app.use('/api/workspaces', workspaceRoutes);
 

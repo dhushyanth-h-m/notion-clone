@@ -43,15 +43,20 @@ export const authApi = {
   
   // Login with Google
   loginWithGoogle: async (token: string) => {
-    const response = await apiClient.post('/auth/google', { token });
-    
-    // Store token in localStorage
-    if (response.data.token) {
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+    try {
+      const response = await apiClient.post('/auth/google', { token });
+      
+      // Store token in localStorage
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Google login API error:', error);
+      throw error;
     }
-    
-    return response.data;
   },
   
   // Check if user is logged in
